@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Monthly Budget Planner{% endblock %}
+{% block content %}
+{% set values = budget["values"] %}
+{% set summary = budget["summary"] %}
+{% macro money_input(name, label, value) -%}
+<label class="entry-row" for="{{ name }}">
+  <span>{{ label }}</span>
+  <input
+    id="{{ name }}"
+    name="{{ name }}"
+    type="number"
+    step="0.01"
+    data-money="true"
+    value="{{ "{:.2f}".format(value|default(0, true)) }}"
+  />
+</label>
+{%- endmacro %}
+
+<header class="topbar">
+  <div>
+    <p class="eyebrow">Budget Planner</p>
+    <h2>{{ budget.month_label }}</h2>
+    <p class="topbar-copy">
+      Every month has its own saved budget record in TinyDB (`data/budget.json`).
+    </p>
+  </div>
+
+  <form method="get" action="{{ url_for('dashboard') }}" class="month-switcher">
+    <label for="month-picker">Month</label>
+    <div class="month-picker-row">
+      <input
+        id="month-picker"
+        type="month"
+        name="month"
+        value="{{ budget.month }}"
+        required
+      />
+      <button type="submit" class="secondary-btn">Open</button>
+    </div>
+  </form>
+</header>
+
+{% if saved %}
+<div class="save-banner">Budget for {{ budget.month_label }} saved successfully.</div>
+{% endif %}
+
+<section class="stats-row">
+  <article class="stat-card">
+    <p>Annual Pre-Tax Income</p>
+    <strong>${{ "{:,.2f}".format(summary.annual_pre_tax_income) }}</strong>
+  </article>
+  <article class="stat-card">
+    <p>Monthly Take Home</p>
+    <strong>${{ "{:,.2f}".format(summary.total_monthly_take_home) }}</strong>
+  </article>
+  <article class="stat-card">
+    <p>Planned Monthly Spending</p>
+    <strong>${{ "{:,.2f}".format(summary.total_monthly_spending) }}</strong>
+  </article>
+  <article class="stat-card">
+    <p>Monthly Buffer</p>
+    <strong>${{ "{:,.2f}".format(summary.monthly_buffer) }}</strong>
+  </article>
+</section>
+
+<section class="insights-grid">
+  <article class="pie-panel">
+    <div class="panel-heading">
+      <h3>Quick Allocation</h3>
+      <p>Income vs Expense vs Savings (monthly)</p>
+    </div>
+    <div class="pie-wrap">
+      <div
+        class="pie-chart {{ 'pie-empty' if not pie_chart.has_data else '' }}"
+        style="--income-stop: {{ '%.3f'|format(pie_chart.income_pct) }}%; --expense-stop: {{ '%.3f'|format(pie_chart.expense_end) }}%;"
+      ></div>
+      <div class="pie-legend">
+        <p><span class="legend-dot dot-income"></span> Income: ${{ "{:,.2f}".format(pie_chart.income_amount) }}</p>
+        <p><span class="legend-dot dot-expense"></span> Expense: ${{ "{:,.2f}".format(pie_chart.expense_amount) }}</p>
+        <p><span class="legend-dot dot-savings"></span> Savings: ${{ "{:,.2f}".format(pie_chart.savings_amount) }}</p>
+      </div>
+    </div>
+  </article>
+</section>
+
+<form method="post" action="{{ url_for('save_budget') }}" class="budget-form">
+  <input type="hidden" name="month" value="{{ budget.month }}" />
+
+  <section class="budget-grid">
+    <article class="budget-panel">
+      <h3>Income</h3>
+
+      <div class="budget-block">
+        <h4>Pre-Tax Income (Annual)</h4>
+        {{ money_input('salary', 'Salary', values.salary) }}
+        {{ money_input('stock', 'Stock', values.stock) }}
+        {{ money_input('interest_income_dividends', 'Interest Income (Dividends)', values.interest_income_dividends) }}
+        <div class="total-row total-danger">
+          <span>Total Pre-Tax</span>
+          <strong>${{ "{:,.2f}".format(summary.annual_pre_tax_income) }}</strong>
+        </div>
+      </div>
+
+      <div class="budget-block">
+        <h4>Post-Tax Monthly Calculation</h4>
+        <div class="calculated-row">
+          <span>Pre-Tax Monthly Income</span>
+          <strong>${{ "{:,.2f}".format(summary.pre_tax_monthly_income) }}</strong>
+        </div>
+        {{ money_input('monthly_401k_contribution', 'Monthly 401k Contribution', values.monthly_401k_contribution) }}
+        <div class="calculated-row">
+          <span>Monthly Taxable Income</span>
+          <strong>${{ "{:,.2f}".format(summary.monthly_taxable_income) }}</strong>
+        </div>
+        {{ money_input('monthly_federal_taxes', 'Monthly Federal Taxes (Approx)', values.monthly_federal_taxes) }}
+        {{ money_input('monthly_state_taxes', 'Monthly State Taxes (Approx)', values.monthly_state_taxes) }}
+        {{ money_input('monthly_city_taxes', 'Monthly City Taxes (Approx)', values.monthly_city_taxes) }}
+
+        <div class="total-row total-teal">
+          <span>Post-Tax Monthly Take Home Pay</span>
+          <strong>${{ "{:,.2f}".format(summary.post_tax_monthly_take_home) }}</strong>
+        </div>
+        <div class="total-row total-teal">
+          <span>Total Annual Take Home Pay</span>
+          <strong>${{ "{:,.2f}".format(summary.total_annual_take_home) }}</strong>
+        </div>
+        <div class="total-row total-teal">
+          <span>Total Monthly Take Home Pay</span>
+          <strong>${{ "{:,.2f}".format(summary.total_monthly_take_home) }}</strong>
+        </div>
+      </div>
+
+      <div class="budget-block">
+        <h4>Irresponsible Stuff</h4>
+        {{ money_input('fun_random', 'Fun / Random', values.fun_random) }}
+        {{ money_input('alcohol', 'Alcohol', values.alcohol) }}
+        {{ money_input('ubers', 'Ubers', values.ubers) }}
+        {{ money_input('other', 'Other', values.other) }}
+        <div class="total-row total-teal">
+          <span>Total Irresponsible</span>
+          <strong>${{ "{:,.2f}".format(summary.total_irresponsible) }}</strong>
+        </div>
+      </div>
+    </article>
+
+    <article class="budget-panel">
+      <h3>Monthly Expenses</h3>
+
+      <div class="budget-block">
+        <h4>Responsible Stuff</h4>
+        {{ money_input('rent', 'Rent', values.rent) }}
+        {{ money_input('groceries', 'Groceries', values.groceries) }}
+        {{ money_input('utilities', 'Utilities', values.utilities) }}
+        {{ money_input('student_loans', 'Student Loans', values.student_loans) }}
+        {{ money_input('credit_card_debt', 'Credit Card Debt', values.credit_card_debt) }}
+        {{ money_input('robinhood', 'Robinhood', values.robinhood) }}
+        {{ money_input('laundry', 'Laundry', values.laundry) }}
+        {{ money_input('car', 'Car (Payment + Gas + Maintenance)', values.car) }}
+        {{ money_input('public_transportation', 'Public Transportation', values.public_transportation) }}
+        {{ money_input('dog_care', 'Dog Care', values.dog_care) }}
+        <div class="total-row total-teal">
+          <span>Total Responsible</span>
+          <strong>${{ "{:,.2f}".format(summary.total_responsible) }}</strong>
+        </div>
+      </div>
+
+      <div class="budget-block">
+        <h4>Bonus Spending</h4>
+        {{ money_input('eating_out_restaurants', 'Eating Out / Restaurants', values.eating_out_restaurants) }}
+        {{ money_input('travel', 'Travel', values.travel) }}
+        {{ money_input('gym_fitness', 'Gym / Fitness', values.gym_fitness) }}
+        {{ money_input('bathhouse', 'Bathhouse', values.bathhouse) }}
+        {{ money_input('hair', 'Hair', values.hair) }}
+        {{ money_input('nails', 'Nails', values.nails) }}
+        {{ money_input('skincare', 'Skincare', values.skincare) }}
+        {{ money_input('clothes', 'Clothes', values.clothes) }}
+        {{ money_input('coffee', 'Coffee', values.coffee) }}
+
+        <div class="total-row total-teal">
+          <span>Total Bonus Spending</span>
+          <strong>${{ "{:,.2f}".format(summary.total_bonus_spending) }}</strong>
+        </div>
+      </div>
+    </article>
+
+    <article class="budget-panel">
+      <h3>Savings</h3>
+
+      <div class="budget-block">
+        <h4>Savings</h4>
+        {{ money_input('savings_401k', '401k', values.savings_401k) }}
+        {{ money_input('savings_cash', 'Cash', values.savings_cash) }}
+        {{ money_input('savings_roth_ira', 'Roth IRA', values.savings_roth_ira) }}
+        {{ money_input('savings_stocks', 'Stocks', values.savings_stocks) }}
+        <div class="total-row total-teal">
+          <span>Total Savings</span>
+          <strong>${{ "{:,.2f}".format(summary.total_savings) }}</strong>
+        </div>
+      </div>
+
+      <div class="budget-block">
+        <h4>Plan Snapshot</h4>
+        <div class="calculated-row">
+          <span>Monthly Tax Total</span>
+          <strong>${{ "{:,.2f}".format(summary.monthly_tax_total) }}</strong>
+        </div>
+        <div class="calculated-row">
+          <span>Total Expenses</span>
+          <strong>${{ "{:,.2f}".format(summary.total_expenses) }}</strong>
+        </div>
+        <div class="calculated-row">
+          <span>Total Monthly Spending</span>
+          <strong>${{ "{:,.2f}".format(summary.total_monthly_spending) }}</strong>
+        </div>
+        <div class="total-row total-ink">
+          <span>Monthly Buffer</span>
+          <strong>${{ "{:,.2f}".format(summary.monthly_buffer) }}</strong>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <div class="form-actions">
+    <button class="primary-btn" type="submit">Save {{ budget.month_label }} Budget</button>
+    <p>All fields are persisted for this month. Opening another month gives you that month's own budget.</p>
+  </div>
+</form>
+{% endblock %}
